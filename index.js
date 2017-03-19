@@ -2,7 +2,6 @@ var express = require('express'),
     config =  require('./config'),
     session = require('express-session'),
     SessionStore = require('connect-redis')(session),
-    log = console.log,
     redis = new require('ioredis')(config.redisUrl),
     mongoose = require('mongoose'),
     Promise = require('bluebird'),
@@ -40,106 +39,38 @@ function uid(len) {
     return buf.join('');
 }
 
-var userSchema = new Schema({
+var taskSchema = new Schema({
     id:  String,
-    password: String,
-    type:   String,
+    title: String,
+    description: String,
+    type:  String,
+    user: String,
+    param: Object,
+    extra: Object,
     create_date: { type: Date, default: new Date().toLocaleString() },
 });
 
-var User = mongoose.model('User', userSchema);
+var Task = mongoose.model('Task', taskSchema);
 
-mongoose.connect("mongodb://127.0.0.1:27017/usermicroservice");
+mongoose.connect(config.mongodbUrl);
 mongoose.Promise = Promise;
 app.set('trust proxy', 1);
 
 app.use(bodyParser.json()); // for parsing application/json
 app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
-app.use(session({
-    name: 'session',
-    store: new SessionStore({
-        client: redis
-    }),
-    proxy: true,
-    resave: true,
-    saveUninitialized: true,
-    secret: 'nice boat',
-    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }
-}));
 
 app.get('/', function (req, res) {
-    res.send(req.session);
-});
-
-app.get('/setup/', function (req, res) {
-    var user = new User({ id: req.query.userID, password: req.query.password});
-    User.findOne({id: req.query.userID}).exec().then(function (data) {
-        if (data) {
-            res.redirect('/login/?userID=' + req.query.userID + '&password=' + req.query.password);
-        } else {
-            generatePasswordHash(user.password).then(function(hash) {
-                user.password = hash;
-                user.save().then(function (data) {
-                    res.redirect('/login/?userID=' + req.query.userID + '&password=' + req.query.password);
-            });
-            });
-        }
-    });
-
-});
-
-app.get('/login/', function(req, res) {
-    User.findOne({id: req.query.userID}).exec().then(function (data) {
-        if (data) {
-            bcryptCompare(req.query.password, data.password).then(function(matched) {
-                if (matched) {
-                    data = data.toObject();
-                    delete data.password;
-                    req.session.user = data;
-                    req.session.save();
-                    var token = uid(256);
-                    redis.set('token:'+ token, req.session.user.id, 'EX',30 * 24 * 3600)
-                        .then(function () {
-                            res.json({msg: 'ok', token: token});
-                        })
-                    } else {
-                    res.json({msg: 'wrong userID or password'});
-                }
-            });
-        } else {
-            res.json({msg: 'no user'});
-        }
+    Task.find({id:'test'}).exec().then(function(data) {
+        res.json({msg: 'ok', tasks: data});
     });
 });
 
-app.get('/token/', function(req, res){
-    if (req.session && req.session.user) {
-        var token = uid(256);
-        redis.set('token:'+ token, req.session.user.id, 'EX',30 * 24 * 3600)
-            .then(function () {
-                res.send(token);
-            })
-    }
-});
+app.post('/', function(req, res) {
+    let task = new Task({id:'test', description: 'first test task', user:'test', param: {myparm: {hi: 'aaa'}}});
+    task.save().then(function (data) {
+        res.json({msg:'ok', data: data.toObject()});
 
-app.get('/user/', function(req, res) {
-   if (req.session && req.session.user) {
-       res.send(req.session.user);
-   } else if (req.query.userToken){
-       redis.get('token:'+ req.query.userToken).then(function (userID) {
-          if (userID) {
-              User.findOne({id: userID}).exec().then(function (data) {
-                  data = data.toObject();
-                  delete data.password;
-                  res.json({msg: 'ok', user: data});
-              });
-          } else {
-              res.json({msg: 'need login'});
-          }
-       });
-   } else {
-       res.json({msg: 'need login'});
-   }
+    })
 });
 
 app.listen(config.port);

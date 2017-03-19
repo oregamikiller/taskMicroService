@@ -4,9 +4,9 @@ var _ = require('lodash'),
     config;
 
 config = {
-    mongodbUrl: 'mongodb://localhost:27017/userservice',
+    mongodbUrl: 'mongodb://localhost:27017/taskservice',
     redisUrl: 'redis://localhost@127.0.0.1:6379',
-    port: 10002
+    port: 10003
 }
 
 try {
